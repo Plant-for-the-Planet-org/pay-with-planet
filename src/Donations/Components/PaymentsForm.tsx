@@ -28,6 +28,7 @@ import CheckBox from "../../Common/InputTypes/CheckBox";
 import { useRouter } from "next/router";
 import { CONTACT, PAYMENT, THANK_YOU } from "src/Utils/donationStepConstants";
 import BankTransfer from "../PaymentMethods/BankTransfer";
+import BoletoPayPayments from "../PaymentMethods/BoletoPayments";
 
 interface Props {}
 
@@ -73,19 +74,27 @@ function PaymentsForm({}: Props): ReactElement {
     setTransferDetails,
     callbackUrl,
     callbackMethod,
+    boletoBillingDetails,
   } = React.useContext(QueryParamContext);
+
+  // This will prevent the replacement of paymentIntentID in donation in boleto
+  React.useEffect(() => {
+    const { expiresAt, hostedVoucherURL, number, pdf } = router.query;
+    if (hostedVoucherURL) {
+      setTransferDetails({
+        expiresAt,
+        hostedVoucherURL,
+        number,
+        pdf,
+      });
+      setdonationStep(4);
+    }
+  }, []);
 
   React.useEffect(() => {
     setPaymentType("CARD");
   }, []);
 
-  // React.useEffect(() => {
-  //   if (paymentError) {
-  //     router.replace({
-  //       query: { ...router.query, step: THANK_YOU },
-  //     });
-  //   }
-  // }, [paymentError]);
   const sofortCountries = ["AT", "BE", "DE", "IT", "NL", "ES"];
 
   const onSubmitPayment = async (
@@ -113,6 +122,7 @@ function PaymentsForm({}: Props): ReactElement {
       router,
       tenant,
       setTransferDetails,
+      boletoBillingDetails,
     });
   };
 
@@ -353,6 +363,20 @@ function PaymentsForm({}: Props): ReactElement {
                     ? paymentSetup?.recurrency.methods.includes("card")
                     : true)
                 }
+                showBoleto={
+                  currency === "BRL" &&
+                  country === "BR" &&
+                  quantity &&
+                  paymentSetup &&
+                  (quantity * paymentSetup.unitCost > 49999.99 ||
+                    quantity * paymentSetup.unitCost < 5.0)
+                    ? false
+                    : showPaymentMethod({
+                        paymentMethod: "boleto",
+                        currencies: ["BRL"],
+                        countries: ["BR"],
+                      })
+                }
                 onNativePaymentFunction={onPaymentFunction}
               />
             )}
@@ -448,6 +472,14 @@ function PaymentsForm({}: Props): ReactElement {
                 {/* <Elements stripe={getStripe(paymentSetup)}> */}
                 <BankTransfer onSubmitPayment={onSubmitPayment} />
                 {/* </Elements> */}
+              </div>
+              <div
+                role="tabpanel"
+                hidden={paymentType !== "Boleto"}
+                id={`payment-methods-tabpanel-${"Boleto"}`}
+                aria-labelledby={`scrollable-force-tab-${"Boleto"}`}
+              >
+                <BoletoPayPayments onSubmitPayment={onSubmitPayment} />
               </div>
             </div>
           ) : (

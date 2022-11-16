@@ -33,6 +33,7 @@ export function buildPaymentProviderRequest(
         case "sofort":
         case "stripe_giropay":
         case "giropay":
+        case "boleto":
           source = { object: providerObject };
           break;
       }
@@ -247,6 +248,7 @@ export async function payDonationFunction({
   router,
   tenant,
   setTransferDetails,
+  boletoBillingDetails,
 }: PayDonationProps) {
   // const router = useRouter();
   setIsPaymentProcessing(true);
@@ -312,6 +314,8 @@ export async function payDonationFunction({
           setshowErrorCard,
           router,
           tenant,
+          setTransferDetails,
+          boletoBillingDetails,
         });
       }
     }
@@ -384,6 +388,7 @@ const buildBillingDetails = (contactDetails: any) => {
       country: contactDetails.country,
       line1: contactDetails.address,
       postal_code: contactDetails.zipCode,
+      ...(contactDetails.state && { state: contactDetails.state }),
     },
   };
 };
@@ -415,6 +420,8 @@ export async function handleStripeSCAPayment({
   setshowErrorCard,
   router,
   tenant,
+  setTransferDetails,
+  boletoBillingDetails,
 }: HandleStripeSCAPaymentProps) {
   const clientSecret = paymentResponse.response.payment_intent_client_secret;
   const key = paymentSetup?.gateways?.stripe?.authorization.stripePublishableKey
@@ -507,9 +514,57 @@ export async function handleStripeSCAPayment({
       break;
     }
 
+    case "boleto": {
+      const { error, paymentIntent } = await stripe.confirmBoletoPayment(
+        paymentResponse.response.payment_intent_client_secret,
+        {
+          payment_method: {
+            type: "boleto",
+            billing_details: buildBillingDetails(boletoBillingDetails),
+            boleto: {
+              tax_id: boletoBillingDetails.cnpOrCnjpNumber,
+            },
+          },
+        },
+        {
+          handleActions: false,
+        }
+      );
+
+      if (error) {
+        handlePaymentError(error, setIsPaymentProcessing, setPaymentError);
+        return;
+      }
+
+      const _boletoTransferDetails =
+        paymentIntent?.next_action?.boleto_display_details;
+
+      const boletoTransferDetails = {
+        expiresAt: new Date(
+          _boletoTransferDetails.expires_at * 1000
+        ).toString(),
+        hostedVoucherURL: _boletoTransferDetails.hosted_voucher_url,
+        number: _boletoTransferDetails.number,
+        pdf: _boletoTransferDetails.pdf,
+      };
+
+      setTransferDetails(boletoTransferDetails);
+
+      const routerParams = {
+        ...router.query,
+        ...boletoTransferDetails,
+      };
+
+      router.replace({
+        query: { ...routerParams, step: THANK_YOU },
+      });
+
+      break;
+    }
+
     case "sofort": {
       const { errorSofort, paymentIntentSofort } =
-        await stripe.confirmSofortPayment(
+        await stripe.confirmSofortSetup(
           paymentResponse.response.payment_intent_client_secret,
           {
             payment_method: {
@@ -531,13 +586,12 @@ export async function handleStripeSCAPayment({
       break;
     }
     case "sepa_debit": {
-      try {
-        const sepaResponse = await stripe.confirmSepaDebitPayment(clientSecret);
-      } catch {
-        (err: any) => {
-          handlePaymentError(err, setIsPaymentProcessing, setPaymentError);
-        };
+      const { error } = await stripe.confirmSepaDebitPayment(clientSecret);
+
+      if (error) {
+        handlePaymentError(error, setIsPaymentProcessing, setPaymentError);
       }
+
       router.push({
         query: { ...router.query, step: THANK_YOU },
       });

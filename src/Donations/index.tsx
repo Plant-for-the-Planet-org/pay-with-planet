@@ -1,4 +1,4 @@
-import React, { ReactElement, useEffect } from "react";
+import React, { ReactElement, useEffect, useState } from "react";
 import ContactsForm from "./Components/ContactsForm";
 import { QueryParamContext } from "../Layout/QueryParamContext";
 import PaymentsForm from "./Components/PaymentsForm";
@@ -105,9 +105,12 @@ function DonationInfo() {
     onBehalfDonor,
     isPlanetCashActive,
     country,
+    transferDetails,
   } = React.useContext(QueryParamContext);
 
-  const [isMobile, setIsMobile] = React.useState(false);
+  const router = useRouter();
+
+  const [isMobile, setIsMobile] = useState<boolean>(false);
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       if (window.innerWidth > 767) {
@@ -144,7 +147,7 @@ function DonationInfo() {
       </div>
     );
   };
-  const router = useRouter();
+
   const goBack = () => {
     const callbackUrl = router.query.callback_url;
     router.push(`${callbackUrl ? callbackUrl : "/"}`);
@@ -365,21 +368,52 @@ function DonationInfo() {
             </div>
           )}
 
-          {donationID && !(isMobile && router.query.step === "thankyou") && (
-            <a
-              href={`${
-                process.env.APP_URL
-              }/?context=${donationID}&tenant=${tenant}&country=${country}&locale=${
-                localStorage.getItem("language")
-                  ? localStorage.getItem("language")
-                  : "en"
-              }`}
-              className="donations-transaction-details mt-20"
-              data-test-id="referenceDonation"
-            >
-              {`Ref - ${donationID}`}
-            </a>
-          )}
+          {donationID &&
+            !(isMobile && router.query.step === "thankyou") &&
+            (transferDetails?.hostedVoucherURL ? (
+              <p
+                onClick={() => {
+                  const url = encodeURI(
+                    `${
+                      process.env.APP_URL
+                    }/?context=${donationID}&tenant=${tenant}&country=${country}&locale=${
+                      localStorage.getItem("language")
+                        ? localStorage.getItem("language")
+                        : "en"
+                    }&expiresAt=${transferDetails.expiresAt}&hostedVoucherURL=${
+                      transferDetails.hostedVoucherURL
+                    }&number=${transferDetails.number}&pdf=${
+                      transferDetails.pdf
+                    }`
+                  );
+
+                  window.location.replace(url);
+                }}
+                className="donations-transaction-details mt-20"
+                data-test-id="referenceDonation"
+              >
+                {`Ref - ${donationID}`}
+              </p>
+            ) : (
+              <p
+                onClick={() => {
+                  const url = encodeURI(
+                    `${
+                      process.env.APP_URL
+                    }/?context=${donationID}&tenant=${tenant}&country=${country}&locale=${
+                      localStorage.getItem("language")
+                        ? localStorage.getItem("language")
+                        : "en"
+                    }`
+                  );
+                  window.location.replace(url);
+                }}
+                className="donations-transaction-details mt-20"
+                data-test-id="referenceDonation"
+              >
+                {`Ref - ${donationID}`}
+              </p>
+            ))}
         </div>
       ) : null}
     </div>
